@@ -1,8 +1,7 @@
 use crate::config::Config;
-use std::io::{stdin, BufRead, BufReader, Write};
-use std::net::{Ipv4Addr, TcpListener, TcpStream};
-use std::process::{ChildStdin, ChildStdout, Command, Stdio};
-// use std::process::Command;
+use std::io::{self, BufRead, BufReader, Write};
+use std::net::{TcpListener, TcpStream};
+use std::process::{Command, Stdio};
 use std::thread;
 
 pub struct TcpServer<'a> {
@@ -36,61 +35,42 @@ impl<'a> TcpServer<'a> {
             .stdout(Stdio::piped())
             .spawn()
             .expect(format!("Failed to start {}", cmd).as_str());
-        let stdout = cmd.stdout.take().expect("Failed to initiate stdout");
-        let stdin = cmd.stdin.take().expect("Failed to initiate stdin");
+        let mut stdout = cmd.stdout.take().expect("Failed to initiate stdout");
+        let mut stdin = cmd.stdin.take().expect("Failed to initiate stdin");
         let cloned_stream = stream.try_clone().expect("Could not clone TcpStream");
         thread::scope(move |s| {
             s.spawn(move || {
-                self.handle_process_reading(cloned_stream, stdin);
+                let mut buf_reader = BufReader::new(&mut stdout);
+                self.handle_stdin(cloned_stream, &mut buf_reader);
             });
-            self.handle_process_writing(stream, stdout);
+            self.handle_stdout(stream, &mut stdin);
         });
         cmd.wait().unwrap();
-    }
-    fn handle_process_reading(&self, mut stream: TcpStream, mut stdin: ChildStdin) {
-        loop {
-            let buf_reader = BufReader::new(&mut stream);
-            buf_reader.lines().for_each(|line| {
-                stdin
-                    .write_all(format!("{}\n", line.unwrap()).as_bytes())
-                    .unwrap();
-                stdin.flush().unwrap();
-            });
-        }
-    }
-    fn handle_process_writing(&self, mut stream: TcpStream, mut stdout: ChildStdout) {
-        loop {
-            let buf_reader = BufReader::new(&mut stdout);
-            buf_reader.lines().for_each(|line| {
-                stream
-                    .write_all(format!("{}\n", line.unwrap()).as_bytes())
-                    .unwrap();
-                stream.flush().unwrap();
-            });
-        }
     }
 
     fn handle_front_stream(&self, stream: TcpStream) {
         let cloned_stream = stream.try_clone().expect("Could not clone TcpStream");
         thread::scope(move |s| {
             s.spawn(move || {
-                self.handle_reading(cloned_stream);
+                self.handle_stdout(cloned_stream, &mut io::stdout());
             });
-            self.handle_writing(stream);
+            self.handle_stdin(stream, &mut io::stdin().lock());
         });
     }
-    fn handle_reading(&self, mut stream: TcpStream) {
+    fn handle_stdout(&self, mut stream: TcpStream, stdout: &mut dyn Write) {
         loop {
             let buf_reader = BufReader::new(&mut stream);
             buf_reader.lines().for_each(|line| {
-                println!("{}", line.unwrap());
+                stdout
+                    .write_all(format!("{}\n", line.unwrap()).as_bytes())
+                    .unwrap();
             });
         }
     }
-    fn handle_writing(&self, mut stream: TcpStream) {
+    fn handle_stdin(&self, mut stream: TcpStream, stdin: &mut dyn BufRead) {
         loop {
             let mut input = String::new();
-            stdin().read_line(&mut input).unwrap();
+            stdin.read_line(&mut input).unwrap();
             stream.write_all(input.as_bytes()).unwrap();
             stream.flush().unwrap();
         }
