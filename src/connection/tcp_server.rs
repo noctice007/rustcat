@@ -14,7 +14,8 @@ impl<'a> TcpServer<'a> {
         Self { config }
     }
     pub fn start(&self) -> anyhow::Result<()> {
-        let server = TcpListener::bind((Ipv4Addr::UNSPECIFIED, self.config.port))?;
+        let server = TcpListener::bind(format!("{}:{}", self.config.source, self.config.port))?;
+        println!("Listening in {:?}", server.local_addr().unwrap());
         let (stream, address) = server.accept()?;
         println!("Got a connection from {:?}", address);
         self.handle_stream(stream)?;
