@@ -15,6 +15,7 @@ impl<'a> TcpClient<'a> {
     }
     pub fn start(&self) -> anyhow::Result<()> {
         if let Some(ref target) = self.config.target {
+            log::trace!("Connecting to {}:{}", target, self.config.port);
             let stream = TcpStream::connect(format!("{}:{}", target, self.config.port))?;
             let cloned_stream = stream.try_clone()?;
             thread::scope(move |s| {

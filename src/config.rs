@@ -1,6 +1,8 @@
 use clap::Parser;
 #[derive(Parser)]
 pub struct Config {
+    #[arg(long, short, help = "Verbose output")]
+    pub verbose: bool,
     pub target: Option<String>,
     #[arg(long, short, help = "Start listen mode")]
     pub listen: bool,
