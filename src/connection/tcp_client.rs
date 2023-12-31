@@ -14,20 +14,17 @@ impl<'a> TcpClient<'a> {
         Self { config }
     }
     pub fn start(&self) -> anyhow::Result<()> {
-        if let Some(ref target) = self.config.target {
-            log::trace!("Connecting to {}:{}", target, self.config.port);
-            let stream = TcpStream::connect(format!("{}:{}", target, self.config.port))?;
-            let cloned_stream = stream.try_clone()?;
-            thread::scope(move |s| {
-                s.spawn(move || {
-                    self.handle_reading(stream);
-                });
-                self.handle_writing(cloned_stream);
+        let target = self.config.target.as_ref().unwrap();
+        log::trace!("Connecting to {}:{}", target, self.config.port);
+        let stream = TcpStream::connect(format!("{}:{}", target, self.config.port))?;
+        let cloned_stream = stream.try_clone()?;
+        thread::scope(move |s| {
+            s.spawn(move || {
+                self.handle_reading(stream);
             });
-            Ok(())
-        } else {
-            Err(anyhow::anyhow!("Target is not specified"))
-        }
+            self.handle_writing(cloned_stream);
+        });
+        Ok(())
     }
 
     fn handle_reading(&self, mut stream: TcpStream) {
