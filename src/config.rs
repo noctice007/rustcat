@@ -3,7 +3,7 @@ use clap::Parser;
 pub struct Config {
     #[arg(long, short, help = "Verbose output")]
     pub verbose: bool,
-    #[arg(conflicts_with = "listen", required_unless_present = "source")]
+    #[arg(conflicts_with = "listen")]
     pub target: Option<String>,
     #[arg(long, short, help = "Start listen mode")]
     pub listen: bool,
@@ -14,8 +14,7 @@ pub struct Config {
         short,
         help = "Specify the source IP",
         requires = "listen",
-        default_value = "0.0.0.0",
-        required_unless_present = "target"
+        default_value = "0.0.0.0"
     )]
     pub source: String,
     #[arg(

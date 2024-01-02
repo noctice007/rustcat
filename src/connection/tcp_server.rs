@@ -1,6 +1,7 @@
 use crate::config::Config;
 use std::io::{self, BufRead, BufReader, Write};
 use std::net::{TcpListener, TcpStream};
+use std::os::fd::{AsRawFd, FromRawFd};
 use std::process::{Command, Stdio};
 use std::thread;
 
@@ -22,30 +23,21 @@ impl<'a> TcpServer<'a> {
     }
     fn handle_stream(&self, stream: TcpStream) -> anyhow::Result<()> {
         if let Some(ref cmd) = self.config.execute {
-            self.handle_process_stream(cmd, stream);
+            self.handle_process_stream(cmd, stream)?;
         } else {
             self.handle_front_stream(stream);
         }
         Ok(())
     }
 
-    fn handle_process_stream(&self, cmd: &String, stream: TcpStream) {
-        let mut cmd = Command::new(cmd.clone())
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .spawn()
-            .expect(format!("Failed to start {}", cmd).as_str());
-        let mut stdout = cmd.stdout.take().expect("Failed to initiate stdout");
-        let mut stdin = cmd.stdin.take().expect("Failed to initiate stdin");
-        let cloned_stream = stream.try_clone().expect("Could not clone TcpStream");
-        thread::scope(move |s| {
-            s.spawn(move || {
-                let mut buf_reader = BufReader::new(&mut stdout);
-                self.handle_stdin(cloned_stream, &mut buf_reader);
-            });
-            self.handle_stdout(stream, &mut stdin);
-        });
-        cmd.wait().unwrap();
+    fn handle_process_stream(&self, cmd: &String, stream: TcpStream) -> anyhow::Result<()> {
+        let fd = stream.as_raw_fd();
+        Command::new(cmd)
+            .stdin(unsafe { Stdio::from_raw_fd(fd) })
+            .stdout(unsafe { Stdio::from_raw_fd(fd) })
+            .spawn()?
+            .wait()?;
+        Ok(())
     }
 
     fn handle_front_stream(&self, stream: TcpStream) {
